@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useContext } from "react";
+import { AuthContext } from "../context/AuthContext";
 
 export default function Login() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [message, setMessage] = useState("");
+    const { login } = useContext(AuthContext);
 
     function onSubmit(e) {
         e.preventDefault();
@@ -22,7 +24,16 @@ export default function Login() {
             if (!res.ok) {
                 throw new Error("Login failed");
             }
-            // leite den User weiter (auf seine Profilseite zbsp)
+            setMessage(""); // entferne Nachricht, falls vorher login fehlgeschlagen und Fehlernachricht noch angezeigt wird
+            return res.json();
+        })
+        .then(data => {
+            if (data.token) {
+                setEmail("");
+                setPassword("");
+                login(data.token);
+                // TODO: redirect to Account page
+            }
         })
         .catch(() => setMessage("Bitte kontrolliere deine Daten"))
     }

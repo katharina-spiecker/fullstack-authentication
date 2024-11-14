@@ -6,6 +6,7 @@ import bcrypt from "bcrypt";
 import crypto from 'node:crypto';
 import { Resend } from 'resend';
 import cors from "cors";
+import jwt from "jsonwebtoken";
 
 await mongoose.connect(process.env.DB_URI);
 
@@ -32,7 +33,8 @@ app.post("/register", async (req, res) => {
       email: email,
       password: hashedPassword,
       verificationToken: verificationToken,
-      tokenExpiresAt: tokenExpiresAt
+      tokenExpiresAt: tokenExpiresAt,
+      verified: true // TODO: nur zum Testen, lösch danach wieder
     })
 
     const emailResponse = await resend.emails.send({
@@ -94,10 +96,12 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({error: 'Invalid login'});
     }
 
-    res.json({
-      status: "success",
-      user: user
-    });
+    // TODO Erstelle JWT Token
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET_KEY);
+
+    // TODO Antworte mit token und paar Userdaten
+    res.json({user: user, token: token});
+
   } catch (error) {
     res.status(500).json({error: error.message});
   }
@@ -128,5 +132,36 @@ app.get("/verify/:token", async (req, res) => {
   }
 })
 
+// TODO schreibe einen Endpunkt /reports, wo die authMiddleware verwendet wird
+// denn nur eingeloggt User kriegen diese Daten
+// die Endpunkt Handler macht erstmal nichts, uns gehts nur darum, dass die Middleware
+// eingebunden ist
+app.get("/reports", authMiddleware, (req, res) => {
+  console.log(req.user)
+  const reports = [{id: 1, title: "Status Report"}, {id: 2, title: "Aktivitäts Report"}]
+  res.json(reports);
+})
+
+async function authMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send();
+  }
+  // Beispiel Inhalt: Bearer bGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImFydGVtQG.sdfsodkfpoksd
+  // nehme dir den letzten Teil aus dem String, denn das ist der token
+  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).send();
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+    const user = await User.findOne({_id: decoded.userId});
+    req.user = user;
+    next();
+  } catch(err) {
+    return res.status(401).send();
+  }
+}
 
 app.listen("3000", () => console.log("server started on port 3000"));
